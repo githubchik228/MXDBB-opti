@@ -126,7 +126,7 @@ namespace MXDBBOpti
 
         static ImageSource Img(string name)
         {
-            var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("MXDBBOpti." + name);
+            var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("MXDBBOpti." + name);\n            if (s == null && string.Equals(name, "bull.png", StringComparison.OrdinalIgnoreCase)) s = new MemoryStream(EmbeddedLogo.GetBull());
             if (s == null) return null;
             var bi = new BitmapImage();
             bi.BeginInit(); bi.CacheOption = BitmapCacheOption.OnLoad; bi.StreamSource = s; bi.EndInit(); bi.Freeze();
