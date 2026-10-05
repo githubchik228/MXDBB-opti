@@ -532,6 +532,30 @@ namespace MXDBBOpti
             catch (Exception ex) { log("Точка восстановления: " + ex.Message); }
         }
 
+        // ---------- Восстановление последнего бэкапа ----------
+        public static string LatestBackupDir()
+        {
+            try
+            {
+                string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MXDBB Opti Backups");
+                if (!Directory.Exists(root)) return null;
+                return Directory.GetDirectories(root).OrderByDescending(x => x).FirstOrDefault();
+            }
+            catch { return null; }
+        }
+        public static int RestoreBackup(string dir, Action<string> log)
+        {
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return 0;
+            int n = 0;
+            foreach (var file in Directory.GetFiles(dir, "*.reg").OrderBy(x => x))
+            {
+                int code = Sys.Run("reg", "import "" + file + """, log);
+                if (code == 0) n++;
+            }
+            log("Импортировано .reg файлов: " + n);
+            return n;
+        }
+
         // ---------- CLI (без UI) ----------
         public static int RunCli(string[] args)
         {
