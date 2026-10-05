@@ -1,8 +1,1 @@
-@echo off
-setlocal
-set FW=C:\Windows\Microsoft.NET\Framework64\v4.0.30319
-set WPF=%FW%\WPF
-cd /d "%~dp0"
-"%FW%\csc.exe" /nologo /target:winexe /out:"MXDBB Opti.exe" /win32manifest:app.manifest /reference:"%WPF%\PresentationFramework.dll" /reference:"%WPF%\PresentationCore.dll" /reference:"%WPF%\WindowsBase.dll" /reference:"%FW%\System.Xaml.dll" /reference:System.dll /reference:System.Core.dll /reference:System.Management.dll /reference:System.Net.dll Program.cs App.cs Advanced.cs AssemblyInfo.cs
-if %errorlevel%==0 (echo BUILD OK) else (echo BUILD FAILED %errorlevel% & exit /b %errorlevel%)
-exit /b 0
+@echo off\r\nsetlocal\r\nset FW=C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\r\nset WPF=%FW%\\WPF\r\ncd /d "%~dp0"\r\nif not exist release mkdir release\r\n"%FW%\\csc.exe" /nologo /target:winexe /out:"MXDBB Opti.exe" /win32manifest:app.manifest /reference:"%WPF%\\PresentationFramework.dll" /reference:"%WPF%\\PresentationCore.dll" /reference:"%WPF%\\WindowsBase.dll" /reference:"%FW%\\System.Xaml.dll" /reference:System.dll /reference:System.Core.dll /reference:System.Management.dll /reference:System.Net.dll Program.cs App.cs Advanced.cs EmbeddedLogo.cs AssemblyInfo.cs\r\nif not %errorlevel%==0 (echo BUILD FAILED %errorlevel% & exit /b %errorlevel%)\r\ncopy /y "MXDBB Opti.exe" release\\"MXDBB Opti.exe" >nul\r\ncopy /y ..\\README.md release\\README.md >nul\r\necho MXDBB Opti release ready\r\nexit /b 0\r\n
