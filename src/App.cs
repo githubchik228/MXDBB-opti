@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace MXDBBOpti
 {
@@ -108,7 +109,7 @@ namespace MXDBBOpti
         // scan
         Grid scanView; TextBlock scanSummary, scanHw; StackPanel scanCol1, scanCol2; Bar scanBar;
         // tweaks / pro
-        Grid tweaksView, proView;
+        Grid tweaksView, toolsView, monitorView;
         // clean
         Grid cleanView; StackPanel cleanList; TextBlock cleanHint; Border cleanBtn;
         List<CleanChk> cleanChks = new List<CleanChk>();
@@ -120,6 +121,8 @@ namespace MXDBBOpti
         const string URL_Discord = "https://github.com/githubchik228/MXDBB-opti";
 
         TextBlock totalFreedLbl;
+        TextBlock monCpu, monRam, monGpu, monVram, monDisk, monPing, monNet, monProcs;
+        DispatcherTimer monitorTimer;
 
         static ImageSource Img(string name)
         {
@@ -175,12 +178,14 @@ namespace MXDBBOpti
             scanView   = BuildScan();
             tweaksView = BuildTweaks();
             cleanView  = BuildClean();
-            proView    = BuildPro();
+            toolsView   = BuildTools();
+            monitorView = BuildMonitor();
             contentHost.Children.Add(homeView);
             contentHost.Children.Add(scanView);
             contentHost.Children.Add(tweaksView);
             contentHost.Children.Add(cleanView);
-            contentHost.Children.Add(proView);
+            contentHost.Children.Add(toolsView);
+            contentHost.Children.Add(monitorView);
 
             Log("MXDBB Opti — бесплатный мини-тул. Готов к работе.");
             SetView("home");
@@ -214,7 +219,8 @@ namespace MXDBBOpti
             navPanel.Children.Add(NavBtn(G_Search, "Проверка ПК",      "scan"));
             navPanel.Children.Add(NavBtn(G_Gear,   "Настройка",        "tweaks"));
             navPanel.Children.Add(NavBtn(G_Clean,  "Очистка",          "clean"));
-            navPanel.Children.Add(NavBtn(G_Star,   "MXDBB Opti LAB",    "pro"));
+            navPanel.Children.Add(NavBtn(G_Bolt,   "Мониторинг",       "monitor"));
+            navPanel.Children.Add(NavBtn(G_Gear,   "Инструменты",      "tools"));
             Grid.SetRow(navPanel, 1); g.Children.Add(navPanel);
 
             // LAB мини-карточка
@@ -223,10 +229,10 @@ namespace MXDBBOpti
             var pc = new StackPanel();
             var pcHead = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0,0,0,6) };
             pcHead.Children.Add(new TextBlock { Text = G_Star, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 12, Foreground = B(C_Pro), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,7,0) });
-            pcHead.Children.Add(new TextBlock { Text = "Отдельное приложение", Foreground = B(C_Pro), FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            pcHead.Children.Add(new TextBlock { Text = "MXDBB Tools", Foreground = B(C_Pro), FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             pc.Children.Add(pcHead);
-            pc.Children.Add(new TextBlock { Text = "MXDBB Opti LAB — платная полноценная программа. Мониторинг, профили и тонкая настройка под железо.", Foreground = B(C_Muted), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) });
-            pc.Children.Add(ProButton("Узнать о LAB", ()=> SetView("pro")));
+            pc.Children.Add(new TextBlock { Text = "Мониторинг, игровые профили, диагностика и восстановление системы — прямо в MXDBB Opti.", Foreground = B(C_Muted), FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,0,10) });
+            pc.Children.Add(ProButton("Открыть инструменты", ()=> SetView("tools")));
             proCard.Child = pc;
             Grid.SetRow(proCard, 2); g.Children.Add(proCard);
 
@@ -307,7 +313,8 @@ namespace MXDBBOpti
             if (scanView != null)   scanView.Visibility   = key == "scan"   ? Visibility.Visible : Visibility.Collapsed;
             if (tweaksView != null) tweaksView.Visibility = key == "tweaks" ? Visibility.Visible : Visibility.Collapsed;
             if (cleanView != null)  cleanView.Visibility  = key == "clean"  ? Visibility.Visible : Visibility.Collapsed;
-            if (proView != null)    proView.Visibility    = key == "pro"    ? Visibility.Visible : Visibility.Collapsed;
+            if (toolsView != null)   toolsView.Visibility   = key == "tools"   ? Visibility.Visible : Visibility.Collapsed;
+            if (monitorView != null) monitorView.Visibility = key == "monitor" ? Visibility.Visible : Visibility.Collapsed;
 
             foreach (var n in nav)
             {
@@ -321,7 +328,8 @@ namespace MXDBBOpti
             if (key == "scan")   { SetTitle("Проверка ПК", "Что уже оптимально, а что можно улучшить"); RefreshScan(false); }
             if (key == "tweaks") SetTitle("Настройка", "Выбери, что применить, или возьми пресет");
             if (key == "clean")  { SetTitle("Очистка", "Поддержка ПК — убираем кэш и хлам"); RefreshClean(false); }
-            if (key == "pro")    SetTitle("MXDBB Opti LAB", "Отдельное платное приложение — полный набор под твой ПК");
+            if (key == "monitor") { SetTitle("Мониторинг", "Живые показатели ПК и сетевого соединения"); StartMonitor(); }
+            if (key == "tools")   SetTitle("Инструменты", "Диагностика, восстановление и игровые профили");
         }
         void SetTitle(string t, string s) { if (pageTitle != null) pageTitle.Text = t; if (pageSub != null) pageSub.Text = s; }
 
@@ -332,6 +340,7 @@ namespace MXDBBOpti
             if (k == "home") RefreshHome(true);
             if (k == "scan") RefreshScan(true);
             if (k == "clean") RefreshClean(true);
+            if (k == "monitor") StartMonitor();
         }
 
         // ======================= ГЛАВНАЯ =======================
@@ -411,11 +420,11 @@ namespace MXDBBOpti
             var pl = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             var plh = new StackPanel { Orientation = Orientation.Horizontal };
             plh.Children.Add(new TextBlock { Text = G_Star, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 13, Foreground = B(C_Pro), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,8,0) });
-            plh.Children.Add(new TextBlock { Text = "Есть отдельное приложение — MXDBB Opti LAB", Foreground = B(C_Text), FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            plh.Children.Add(new TextBlock { Text = "MXDBB Opti — полный набор инструментов", Foreground = B(C_Text), FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             pl.Children.Add(plh);
-            pl.Children.Add(new TextBlock { Text = "Платная полноценная программа: мониторинг, игровые профили, драйверы и тонкая настройка под твой ПК. Это не эта версия — отдельный продукт.", Foreground = B(C_Muted), FontSize = 11.5, Margin = new Thickness(0,4,0,0), TextWrapping = TextWrapping.Wrap });
+            pl.Children.Add(new TextBlock { Text = "Мониторинг, игровые профили, диагностика, восстановление и безопасные системные инструменты уже входят в эту версию.", Foreground = B(C_Muted), FontSize = 11.5, Margin = new Thickness(0,4,0,0), TextWrapping = TextWrapping.Wrap });
             Grid.SetColumn(pl, 0); pg.Children.Add(pl);
-            var pbtn = ProButton("Смотреть LAB →", ()=> SetView("pro")); pbtn.VerticalAlignment = VerticalAlignment.Center; pbtn.Margin = new Thickness(14,0,0,0);
+            var pbtn = ProButton("Открыть инструменты →", ()=> SetView("tools")); pbtn.VerticalAlignment = VerticalAlignment.Center; pbtn.Margin = new Thickness(14,0,0,0);
             Grid.SetColumn(pbtn, 1); pg.Children.Add(pbtn);
             pro.Child = pg;
             Grid.SetRow(pro, 3); v.Children.Add(pro);
@@ -565,7 +574,7 @@ namespace MXDBBOpti
                 for (int i = 0; i < d.Rows.Count; i++)
                     (i < half ? scanCol1 : scanCol2).Children.Add(ScanRow(d.Rows[i].Key, d.Rows[i].Value));
                 // LAB-намёк
-                scanCol2.Children.Add(LockedRow("Тонкая настройка под твоё железо"));
+                scanCol2.Children.Add(LockedRow("Дополнительная диагностика доступна в «Инструменты»"));
                 var parts = new List<string>(d.Hw); parts.Add("Мусор в Temp: ~" + d.Junk + " МБ");
                 scanHw.Text = string.Join("   ·   ", parts);
             };
@@ -794,108 +803,121 @@ namespace MXDBBOpti
             return Math.Max(1, (int)Math.Round(b / 1024.0)) + " КБ";
         }
 
-        // ======================= LAB =======================        Grid BuildPro()
+        // ======================= ИНСТРУМЕНТЫ =======================
+        Grid BuildTools()
         {
             var v = new Grid { Visibility = Visibility.Collapsed };
+            v.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             v.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             v.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var card = new Border { CornerRadius = new CornerRadius(14), Background = B(C_Card), BorderBrush = B("#3A2C12"), BorderThickness = new Thickness(1) };
-            var g = new Grid { Margin = new Thickness(26,22,26,22) };
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            var info = Card();
+            var sp = new StackPanel { Margin = new Thickness(20,16,20,16) };
+            sp.Children.Add(new TextBlock { Text = "MXDBB TOOLS", Foreground = B(C_AccHi), FontSize = 10, FontWeight = FontWeights.Bold });
+            sp.Children.Add(new TextBlock { Text = "Инструменты для реального обслуживания ПК", Foreground = B(C_Text), FontSize = 18, FontWeight = FontWeights.Bold, Margin = new Thickness(0,3,0,4) });
+            sp.Children.Add(new TextBlock { Text = "Все операции запускаются локально. Никакой лицензии, телеметрии или фоновых сервисов MXDBB не требуется.", Foreground = B(C_Muted), FontSize = 11.5, TextWrapping = TextWrapping.Wrap });
+            info.Child = sp; Grid.SetRow(info,0); v.Children.Add(info);
 
-            var head = new StackPanel { Margin = new Thickness(0,0,0,16) };
-            var ht = new StackPanel { Orientation = Orientation.Horizontal };
-            ht.Children.Add(new TextBlock { Text = G_Star, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 20, Foreground = B(C_Pro), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,10,0) });
-            ht.Children.Add(new TextBlock { Text = "MXDBB Opti LAB", Foreground = B(C_Text), FontSize = 22, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center });
-            head.Children.Add(ht);
-            head.Children.Add(new TextBlock { Text = "MXDBB Opti LAB — это отдельное, полноценное приложение (платное). Оно не заменяет и не «разблокирует» этот мини-тул, а ставится отдельно и даёт полный контроль над ПК: постоянный мониторинг, профили под игры и глубокую настройку под твоё железо.", Foreground = B(C_Muted), FontSize = 12.5, Margin = new Thickness(0,8,0,0), TextWrapping = TextWrapping.Wrap });
-            Grid.SetRow(head, 0); g.Children.Add(head);
+            var grid = new Grid { Margin = new Thickness(0,14,0,0) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition());
+            var left = new StackPanel { Margin = new Thickness(0,0,7,0) };
+            var right = new StackPanel { Margin = new Thickness(7,0,0,0) };
 
-            // витрина: инструменты + оффер
-            var body = new Grid();
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var repair = Card();
+            var rp = new StackPanel { Margin = new Thickness(16,14,16,14) };
+            rp.Children.Add(new TextBlock { Text = "ДИАГНОСТИКА WINDOWS", Foreground = B(C_Faint), FontSize = 10, FontWeight = FontWeights.Bold, Margin = new Thickness(0,0,0,10) });
+            rp.Children.Add(ToolAction("Проверить системные файлы (SFC)", "sfc /scannow", ()=> RunTool("sfc", "/scannow", "SFC")));
+            rp.Children.Add(ToolAction("Восстановить хранилище компонентов (DISM)", "DISM /RestoreHealth", ()=> RunTool("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", "DISM")));
+            rp.Children.Add(ToolAction("Сбросить DNS", "ipconfig /flushdns", ()=> RunTool("ipconfig", "/flushdns", "DNS")));
+            repair.Child = rp; left.Children.Add(repair);
 
-            var toolsCard = new Border { CornerRadius = new CornerRadius(10), Background = B("#121218"), BorderBrush = B(C_Line), BorderThickness = new Thickness(1), Padding = new Thickness(18,15,18,15), Margin = new Thickness(0,0,8,0) };
-            var tv = new StackPanel();
-            tv.Children.Add(new TextBlock { Text = "10 ИНСТРУМЕНТОВ В ОДНОМ ПРИЛОЖЕНИИ", Foreground = B(C_Faint), FontSize = 10.5, FontWeight = FontWeights.Bold, Margin = new Thickness(0,0,0,12) });
-            var tcols = new Grid();
-            tcols.ColumnDefinitions.Add(new ColumnDefinition());
-            tcols.ColumnDefinitions.Add(new ColumnDefinition());
-            var tc1 = new StackPanel { Margin = new Thickness(0,0,10,0) };
-            var tc2 = new StackPanel { Margin = new Thickness(10,0,0,0) };
-            string[][] tools = new[]{
-                new[]{"ИИ-оптимизация","советует точечно под железо"},
-                new[]{"BIOS-анализатор","80+ настроек с путями"},
-                new[]{"89 системных твиков","каждый Safe / Caution"},
-                new[]{"Профили под игры","CS2, Rust, Valorant, Apex…"},
-                new[]{"Раскладка ядер","Affinity под X3D и чиплеты"},
-                new[]{"Бенчмарк","10 тестов, замер до/после"},
-                new[]{"Real-Time мониторинг","FPS, температуры, графики"},
-                new[]{"Обновление драйверов","из проверенных источников"},
-                new[]{"Очистка системы","кэш и мусор с диска"},
-                new[]{"Бэкап и откат","точка восстановления"}
-            };
-            for (int i = 0; i < tools.Length; i++) (i < 5 ? tc1 : tc2).Children.Add(ToolItem(tools[i][0], tools[i][1]));
-            Grid.SetColumn(tc1,0); Grid.SetColumn(tc2,1);
-            tcols.Children.Add(tc1); tcols.Children.Add(tc2);
-            tv.Children.Add(tcols);
-            toolsCard.Child = tv;
-            Grid.SetColumn(toolsCard, 0); body.Children.Add(toolsCard);
+            var backup = Card(); backup.Margin = new Thickness(0,10,0,0);
+            var bp = new StackPanel { Margin = new Thickness(16,14,16,14) };
+            bp.Children.Add(new TextBlock { Text = "ВОССТАНОВЛЕНИЕ", Foreground = B(C_Faint), FontSize = 10, FontWeight = FontWeights.Bold, Margin = new Thickness(0,0,0,10) });
+            bp.Children.Add(ToolAction("Восстановить последний реестр-бэкап", "Импортирует последний набор .reg", ()=> RestoreLastBackup()));
+            bp.Children.Add(ToolAction("Создать точку восстановления", "Windows System Restore", ()=> { Program.RestorePoint(Log); Status("Точка восстановления создана / пропущена Windows"); }));
+            backup.Child = bp; left.Children.Add(backup);
 
-            var offer = new Border { CornerRadius = new CornerRadius(10), Background = B("#17120B"), BorderBrush = B("#3A2C12"), BorderThickness = new Thickness(1), Padding = new Thickness(20,18,20,18), Margin = new Thickness(8,0,0,0) };
-            var ov = new StackPanel();
-            ov.Children.Add(new TextBlock { Text = "РАЗОВЫЙ КЛЮЧ · БЕЗ ПОДПИСОК", Foreground = B(C_Pro), FontSize = 10.5, FontWeight = FontWeights.Bold, Margin = new Thickness(0,0,0,8) });
-            var priceRow = new StackPanel { Orientation = Orientation.Horizontal };
-            priceRow.Children.Add(new TextBlock { Text = "$9.99", Foreground = B(C_Text), FontSize = 34, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Bottom });
-            priceRow.Children.Add(new TextBlock { Text = "разово", Foreground = B(C_Muted), FontSize = 12, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(8,0,0,7) });
-            ov.Children.Add(priceRow);
-            ov.Children.Add(new TextBlock { Text = "Один платёж, без автосписаний. Есть вариант «Навсегда».", Foreground = B(C_Muted), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,4,0,12) });
-            var gift = new Border { CornerRadius = new CornerRadius(8), Background = B("#241A0A"), BorderBrush = B("#4A3818"), BorderThickness = new Thickness(1), Padding = new Thickness(12,9,12,9), Margin = new Thickness(0,0,0,12) };
-            gift.Child = new TextBlock { Text = "🎁  Каждый ключ = билет в розыгрыше $1000", Foreground = B(C_ProHi), FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
-            ov.Children.Add(gift);
-            ov.Children.Add(new TextBlock { Text = "✓ 30 дней гарантии · возврат\n✓ Мгновенный ключ\n✓ 624 отзыва · оплата Stripe / карта РФ", Foreground = B(C_Muted), FontSize = 11.5, Margin = new Thickness(0,0,0,14), LineHeight = 19 });
-            var buy = ProButtonBig("Купить MXDBB Opti LAB →", ()=> Open(URL_App));
-            ov.Children.Add(buy);
-            offer.Child = ov;
-            Grid.SetColumn(offer, 1); body.Children.Add(offer);
+            var profile = Card();
+            var pp = new StackPanel { Margin = new Thickness(16,14,16,14) };
+            pp.Children.Add(new TextBlock { Text = "ИГРОВОЙ ПРОФИЛЬ", Foreground = B(C_Faint), FontSize = 10, FontWeight = FontWeights.Bold });
+            pp.Children.Add(new TextBlock { Text = "Выбери .exe игры и запускай её с профилем MXDBB.", Foreground = B(C_Muted), FontSize = 11, Margin = new Thickness(0,4,0,9), TextWrapping = TextWrapping.Wrap });
+            var path = new TextBox { Height = 32, Text = Advanced.GetSavedGamePath(), Background = B(C_Base), Foreground = B(C_Text), BorderBrush = B(C_Line), BorderThickness = new Thickness(1), Padding = new Thickness(9,0,9,0) };
+            pp.Children.Add(path);
+            var browse = SmallButton("Выбрать EXE", ()=>{
+                var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "EXE files|*.exe|All files|*.*", Title = "Выбери файл игры" };
+                if (dlg.ShowDialog() == true) { path.Text = dlg.FileName; Advanced.SaveGamePath(path.Text); }
+            }); browse.Margin = new Thickness(0,8,0,0); pp.Children.Add(browse);
+            var launch = PrimaryButton("Запустить с Game Boost", 220, ()=>{
+                if (!File.Exists(path.Text)) { Log("Укажи существующий .exe игры."); return; }
+                Advanced.SaveGamePath(path.Text); RunGame(path.Text);
+            }); launch.Margin = new Thickness(0,8,0,0); pp.Children.Add(launch);
+            profile.Child = pp; right.Children.Add(profile);
 
-            Grid.SetRow(body, 1); g.Children.Add(body);
+            var safe = Card(); safe.Margin = new Thickness(0,10,0,0);
+            var sf = new StackPanel { Margin = new Thickness(16,14,16,14) };
+            sf.Children.Add(new TextBlock { Text = "БЕЗОПАСНОСТЬ", Foreground = B(C_Faint), FontSize = 10, FontWeight = FontWeights.Bold, Margin = new Thickness(0,0,0,9) });
+            sf.Children.Add(new TextBlock { Text = "MXDBB не отключает Defender, Windows Update, файл подкачки или защиту ядра. BIOS не меняется автоматически: программа только показывает рекомендации.", Foreground = B(C_Muted), FontSize = 11.5, TextWrapping = TextWrapping.Wrap });
+            safe.Child = sf; right.Children.Add(safe);
 
-            card.Child = g;
-            Grid.SetRow(card, 0); v.Children.Add(card);
-
-            var cta = new Grid { Margin = new Thickness(0,14,0,0) };
-            cta.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            cta.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var note = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            note.Children.Add(new TextBlock { Text = "Это отдельное приложение — открывается на сайте, не заменяет этот мини-тул.", Foreground = B(C_Muted), FontSize = 12 });
-            Grid.SetColumn(note, 0); cta.Children.Add(note);
-            var rlinks = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            rlinks.Children.Add(LinkBtn("Все инструменты и цены →", C_ProHi, ()=> Open(URL_App)));
-            rlinks.Children.Add(new TextBlock { Text = "·", Foreground = B(C_Faint), Margin = new Thickness(10,0,10,0), VerticalAlignment = VerticalAlignment.Center });
-            rlinks.Children.Add(LinkBtn("Discord", C_Muted, ()=> Open(URL_Discord)));
-            Grid.SetColumn(rlinks, 1); cta.Children.Add(rlinks);
-            Grid.SetRow(cta, 1); v.Children.Add(cta);
-
+            Grid.SetColumn(left,0); Grid.SetColumn(right,1); grid.Children.Add(left); grid.Children.Add(right);
+            Grid.SetRow(grid,1); v.Children.Add(grid);
+            var hint = new TextBlock { Text = "После SFC/DISM Windows может попросить перезагрузку. Game Boost использует только безопасные приоритеты процесса и план питания.", Foreground = B(C_Faint), FontSize = 10.5, Margin = new Thickness(2,10,0,0), TextWrapping = TextWrapping.Wrap };
+            Grid.SetRow(hint,2); v.Children.Add(hint);
             return v;
         }
 
-        FrameworkElement ToolItem(string name, string desc)
+        FrameworkElement ToolAction(string title, string sub, Action onClick)
         {
-            var row = new Grid { Margin = new Thickness(0,0,0,11) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var ic = new TextBlock { Text = G_Star, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 10, Foreground = B(C_Pro), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0,3,9,0) };
-            var tx = new StackPanel();
-            tx.Children.Add(new TextBlock { Text = name, Foreground = B(C_Text), FontSize = 12, FontWeight = FontWeights.SemiBold });
-            tx.Children.Add(new TextBlock { Text = desc, Foreground = B(C_Faint), FontSize = 10.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,1,0,0) });
-            Grid.SetColumn(ic, 0); Grid.SetColumn(tx, 1);
-            row.Children.Add(ic); row.Children.Add(tx);
-            return row;
+            var b = new Border { CornerRadius = new CornerRadius(8), Background = B(C_Card2), BorderBrush = B(C_Line), BorderThickness = new Thickness(1), Padding = new Thickness(10,8,10,8), Margin = new Thickness(0,0,0,7), Cursor = Cursors.Hand };
+            var p = new StackPanel();
+            p.Children.Add(new TextBlock { Text = title, Foreground = B(C_Text), FontSize = 12, FontWeight = FontWeights.SemiBold });
+            p.Children.Add(new TextBlock { Text = sub, Foreground = B(C_Faint), FontSize = 10.5, Margin = new Thickness(0,2,0,0) });
+            b.Child = p;
+            b.MouseEnter += (s,e)=>b.Background=B("#24242E"); b.MouseLeave += (s,e)=>b.Background=B(C_Card2);
+            b.MouseLeftButtonUp += (s,e)=>{ if(onClick!=null) onClick(); };
+            interactive.Add(b); return b;
         }
+        void RunTool(string exe, string args, string name)
+        {
+            Busy(true); Log(""); Log("=== " + name + " ===");
+            var th = new Thread(()=>{ try { int code=Sys.Run(exe,args,Log); Log(name+" завершён. Код: "+code); Status(code==0 ? "✔ "+name+" завершён" : "⚠ "+name+" завершён с кодом "+code); } finally { Busy(false); } });
+            th.IsBackground=true; th.SetApartmentState(ApartmentState.STA); th.Start();
+        }
+        void RestoreLastBackup()
+        {
+            Busy(true); Log("=== ВОССТАНОВЛЕНИЕ ПОСЛЕДНЕГО БЭКАПА ===");
+            var th=new Thread(()=>{ try { string d=Program.LatestBackupDir(); if(string.IsNullOrEmpty(d)){Log("Бэкап не найден."); Status("Бэкап не найден"); return;} int n=Program.RestoreBackup(d,Log); Status("✔ Восстановлено веток: "+n); } catch(Exception ex){Log("! "+ex.Message); Status("⚠ Ошибка восстановления");} finally{Busy(false);} });
+            th.IsBackground=true; th.SetApartmentState(ApartmentState.STA); th.Start();
+        }
+        void RunGame(string exe)
+        {
+            try { Advanced.LaunchGame(exe, Log); Status("✔ Игра запущена с Game Boost"); }
+            catch(Exception ex){ Log("! Game Boost: "+ex.Message); Status("⚠ Не удалось запустить игру"); }
+        }
+
+        Grid BuildMonitor()
+        {
+            var v=new Grid { Visibility=Visibility.Collapsed };
+            v.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
+            v.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) });
+            v.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
+            var cards=new Grid();
+            for(int i=0;i<4;i++) cards.ColumnDefinitions.Add(new ColumnDefinition());
+            cards.Children.Add(MetricCard("CPU",out monCpu)); cards.Children.Add(MetricCard("RAM",out monRam)); cards.Children.Add(MetricCard("GPU",out monGpu)); cards.Children.Add(MetricCard("ДИСК C:",out monDisk));
+            for(int i=0;i<4;i++){var e=cards.Children[i];Grid.SetColumn(e,i);((FrameworkElement)e).Margin=new Thickness(i==0?0:6,0,i==3?0:6,0);}
+            Grid.SetRow(cards,0); v.Children.Add(cards);
+            var mid=new Grid{Margin=new Thickness(0,12,0,0)};mid.ColumnDefinitions.Add(new ColumnDefinition());mid.ColumnDefinitions.Add(new ColumnDefinition());
+            var left=Card();var lp=new StackPanel{Margin=new Thickness(16)};lp.Children.Add(new TextBlock{Text="СИСТЕМА",Foreground=B(C_Faint),FontSize=10,FontWeight=FontWeights.Bold,Margin=new Thickness(0,0,0,10)});lp.Children.Add(MetricLine("GPU VRAM",out monVram));lp.Children.Add(MetricLine("PING",out monPing));lp.Children.Add(MetricLine("СЕТЬ",out monNet));lp.Children.Add(MetricLine("ТОП ПРОЦЕССЫ",out monProcs));left.Child=lp;Grid.SetColumn(left,0);left.Margin=new Thickness(0,0,7,0);mid.Children.Add(left);
+            var right=Card();var rp=new StackPanel{Margin=new Thickness(16)};rp.Children.Add(new TextBlock{Text="КОНТРОЛЬ",Foreground=B(C_Faint),FontSize=10,FontWeight=FontWeights.Bold,Margin=new Thickness(0,0,0,10)});rp.Children.Add(new TextBlock{Text="Монитор обновляется автоматически раз в секунду. GPU-данные берутся из nvidia-smi, если NVIDIA доступна.",Foreground=B(C_Muted),FontSize=11.5,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,12)});rp.Children.Add(SmallButton("Обновить сейчас",()=>UpdateMonitor()));rp.Children.Add(SmallButton("Проверить ping Cloudflare",()=>{int p=Advanced.Ping("1.1.1.1");monPing.Text=p>0?p+" ms":"нет ответа";}));right.Child=rp;Grid.SetColumn(right,1);right.Margin=new Thickness(7,0,0,0);mid.Children.Add(right);
+            Grid.SetRow(mid,1);v.Children.Add(mid);
+            var note=new TextBlock{Text="Температуры зависят от драйверов и оборудования; если датчик недоступен, MXDBB не подставляет выдуманное значение.",Foreground=B(C_Faint),FontSize=10.5,Margin=new Thickness(2,10,0,0),TextWrapping=TextWrapping.Wrap};Grid.SetRow(note,2);v.Children.Add(note);
+            return v;
+        }
+        Border MetricCard(string title,out TextBlock value){var c=Card();var p=new StackPanel{Margin=new Thickness(14)};p.Children.Add(new TextBlock{Text=title,Foreground=B(C_Faint),FontSize=9.5,FontWeight=FontWeights.Bold});value=new TextBlock{Text="—",Foreground=B(C_Text),FontSize=16,FontWeight=FontWeights.Bold,Margin=new Thickness(0,5,0,0),TextTrimming=TextTrimming.CharacterEllipsis};p.Children.Add(value);c.Child=p;return c;}
+        FrameworkElement MetricLine(string title,out TextBlock value){var p=new Grid{Margin=new Thickness(0,0,0,10)};p.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(120)});p.ColumnDefinitions.Add(new ColumnDefinition());p.Children.Add(new TextBlock{Text=title,Foreground=B(C_Muted),FontSize=11});value=new TextBlock{Text="—",Foreground=B(C_Text),FontSize=11,TextTrimming=TextTrimming.CharacterEllipsis};Grid.SetColumn(value,1);p.Children.Add(value);return p;}
+        void StartMonitor(){if(monitorTimer==null){monitorTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};monitorTimer.Tick+=(s,e)=>UpdateMonitor();}UpdateMonitor();if(!monitorTimer.IsEnabled)monitorTimer.Start();}
+        void UpdateMonitor(){if(monitorView==null||monitorView.Visibility!=Visibility.Visible)return;try{var x=Advanced.Snapshot();monCpu.Text=x.CpuPercent+"%";monRam.Text=x.RamUsedGb+" / "+x.RamTotalGb+" GB";monGpu.Text=x.GpuName;monVram.Text=x.GpuVram;monDisk.Text=x.DiskFreeGb+" GB свободно";monPing.Text=x.PingMs>0?x.PingMs+" ms":"—";monNet.Text=x.Network;monProcs.Text=x.TopProcesses;}catch(Exception ex){Log("Монитор: "+ex.Message);}}
 
         Border ComparePanel(string title, string titleColor, bool isPro, string[] items)
         {
