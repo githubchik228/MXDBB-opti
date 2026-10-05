@@ -549,7 +549,7 @@ namespace MXDBBOpti
             int n = 0;
             foreach (var file in Directory.GetFiles(dir, "*.reg").OrderBy(x => x))
             {
-                int code = Sys.Run("reg", "import "" + file + """, log);
+                int code = Sys.Run("reg", "import " + "\"" + file + "\"", log);
                 if (code == 0) n++;
             }
             log("Импортировано .reg файлов: " + n);
